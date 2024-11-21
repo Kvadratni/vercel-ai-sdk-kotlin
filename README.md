@@ -1,6 +1,8 @@
 # Vercel AI SDK for Kotlin
 
-A Kotlin implementation of the Vercel AI SDK for building AI-powered streaming text and chat UIs.
+A Kotlin implementation of the [Vercel AI SDK](https://github.com/vercel/ai) for building AI-powered streaming text and chat UIs.
+
+This is a port of the official JavaScript/TypeScript SDK to Kotlin, providing the same functionality with idiomatic Kotlin APIs.
 
 ## Features
 

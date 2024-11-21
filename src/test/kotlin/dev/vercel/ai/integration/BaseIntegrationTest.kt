@@ -3,6 +3,8 @@ package dev.vercel.ai.integration
 import dev.vercel.ai.providers.OpenAIProvider
 import dev.vercel.ai.providers.AnthropicProvider
 import dev.vercel.ai.providers.HuggingFaceProvider
+import dev.vercel.ai.embeddings.OpenAIEmbeddingsProvider
+import dev.vercel.ai.embeddings.AzureOpenAIEmbeddingsProvider
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.TestInstance
 import java.util.Properties
@@ -12,6 +14,8 @@ abstract class BaseIntegrationTest {
     protected lateinit var openAIProvider: OpenAIProvider
     protected lateinit var anthropicProvider: AnthropicProvider
     protected lateinit var huggingFaceProvider: HuggingFaceProvider
+    protected lateinit var openAIEmbeddingsProvider: OpenAIEmbeddingsProvider
+    protected lateinit var azureOpenAIEmbeddingsProvider: AzureOpenAIEmbeddingsProvider
     
     protected val properties = Properties()
     
@@ -36,6 +40,16 @@ abstract class BaseIntegrationTest {
         huggingFaceProvider = HuggingFaceProvider(
             apiKey = System.getenv("HUGGINGFACE_API_KEY") ?: properties.getProperty("huggingface.api.key"),
             baseUrl = properties.getProperty("huggingface.base.url", "https://api-inference.huggingface.co/models")
+        )
+
+        openAIEmbeddingsProvider = OpenAIEmbeddingsProvider(
+            apiKey = System.getenv("OPENAI_API_KEY") ?: properties.getProperty("openai.api.key"),
+            baseUrl = properties.getProperty("openai.base.url", "https://api.openai.com/v1")
+        )
+
+        azureOpenAIEmbeddingsProvider = AzureOpenAIEmbeddingsProvider(
+            apiKey = System.getenv("AZURE_OPENAI_API_KEY") ?: properties.getProperty("azure.openai.api.key"),
+            baseUrl = properties.getProperty("azure.openai.base.url")
         )
     }
     

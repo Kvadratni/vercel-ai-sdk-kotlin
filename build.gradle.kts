@@ -14,6 +14,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
+    implementation("org.json:json:20231013") // Added for JSON support in embeddings
     
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.3")
