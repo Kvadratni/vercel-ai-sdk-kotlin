@@ -1,0 +1,14 @@
+# Integration test configuration
+# Copy this file to integration-test.properties and fill in your API keys
+
+# OpenAI Configuration
+openai.api.key=your-openai-api-key-here
+openai.base.url=https://api.openai.com/v1
+
+# Anthropic Configuration
+anthropic.api.key=your-anthropic-api-key-here
+anthropic.base.url=https://api.anthropic.com/v1
+
+# HuggingFace Configuration
+huggingface.api.key=your-huggingface-api-key-here
+huggingface.base.url=https://api-inference.huggingface.co/models

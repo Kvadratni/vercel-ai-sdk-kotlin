@@ -1,0 +1,167 @@
+package dev.vercel.ai.providers
+
+import dev.vercel.ai.AIModel
+import dev.vercel.ai.AIStream
+import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.options.ProviderOptions
+import dev.vercel.ai.options.OpenAIOptions
+import dev.vercel.ai.tools.CallableTool
+import dev.vercel.ai.tools.ToolCallResponse
+import kotlinx.coroutines.flow.Flow
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+
+/**
+ * OpenAI provider implementation for the Vercel AI SDK
+ */
+class OpenAIProvider(
+    private val apiKey: String,
+    private val baseUrl: String = "https://api.openai.com/v1",
+    private val client: OkHttpClient = OkHttpClient()
+) : AIModel {
+    private val mapper = jacksonObjectMapper()
+    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
+    /**
+     * Generates a completion for the given prompt using OpenAI's completion API
+     */
+    override suspend fun complete(
+        prompt: String,
+        options: ProviderOptions,
+        signal: AbortSignal? = null
+    ): Flow<String> {
+        require(options is OpenAIOptions) { "Options must be OpenAIOptions" }
+        options.validate()
+        
+        val requestBody = buildMap {
+            putAll(options.toMap())
+            put("prompt", prompt)
+        }
+
+        return RetryHandler.withRetry {
+            val request = Request.Builder()
+                .url("$baseUrl/completions")
+                .post(mapper.writeValueAsString(requestBody).toRequestBody(jsonMediaType))
+                .header("Authorization", "Bearer $apiKey")
+                .header("Accept", "text/event-stream")
+                .build()
+
+            try {
+                val response = client.newCall(request).execute()
+                if (response.code == 429) {
+                    throw AIError.RateLimitError(
+                        provider = "openai",
+                        retryAfter = response.header("Retry-After")?.toLongOrNull()?.times(1000)
+                    )
+                }
+                AIStream.fromResponse(response)
+            } catch (e: Exception) {
+                when (e) {
+                    is AIError -> throw e
+                    else -> throw AIError.ProviderError(
+                        statusCode = 500,
+                        message = e.message ?: "Unknown error",
+                        provider = "openai"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Generates a chat completion for the given messages using OpenAI's chat API
+     */
+    override suspend fun chat(
+        messages: List<ChatMessage>,
+        options: ProviderOptions,
+        functions: List<CallableTool>? = null,
+        signal: AbortSignal? = null
+    ): Flow<String> {
+        require(options is OpenAIOptions) { "Options must be OpenAIOptions" }
+        options.validate()
+        
+        val formattedMessages = messages.map { message ->
+            buildMap {
+                put("role", message.role)
+                put("content", message.content)
+                message.name?.let { put("name", it) }
+                message.functionCall?.let { functionCall ->
+                    put("function_call", mapOf(
+                        "name" to functionCall.name,
+                        "arguments" to functionCall.arguments
+                    ))
+                }
+            }
+        }
+
+        val requestBody = buildMap {
+            putAll(options.toMap())
+            put("messages", formattedMessages)
+            
+            functions?.let { funcs ->
+                put("functions", funcs.map { func ->
+                    mapOf(
+                        "name" to func.definition.function.name,
+                        "description" to func.definition.function.description,
+                        "parameters" to mapOf(
+                            "type" to "object",
+                            "properties" to func.definition.function.parameters.mapValues { (_, param) ->
+                                buildMap {
+                                    put("type", param.type)
+                                    param.description?.let { put("description", it) }
+                                    param.enum?.let { put("enum", it) }
+                                    param.properties?.let { props ->
+                                        put("properties", props.mapValues { (_, propParam) ->
+                                            buildMap {
+                                                put("type", propParam.type)
+                                                propParam.description?.let { put("description", it) }
+                                                propParam.enum?.let { put("enum", it) }
+                                            }
+                                        })
+                                        put("required", props.filter { it.value.required }.keys.toList())
+                                    }
+                                }
+                            },
+                            "required" to func.definition.function.parameters
+                                .filter { it.value.required }
+                                .keys.toList()
+                        )
+                    )
+                })
+                put("function_call", "auto")
+            }
+        }
+
+        return RetryHandler.withRetry {
+            val request = Request.Builder()
+                .url("$baseUrl/chat/completions")
+                .post(mapper.writeValueAsString(requestBody).toRequestBody(jsonMediaType))
+                .header("Authorization", "Bearer $apiKey")
+                .header("Accept", "text/event-stream")
+                .build()
+
+            try {
+                val response = client.newCall(request).execute()
+                if (response.code == 429) {
+                    throw AIError.RateLimitError(
+                        provider = "openai",
+                        retryAfter = response.header("Retry-After")?.toLongOrNull()?.times(1000)
+                    )
+                }
+                AIStream.fromResponse(response)
+            } catch (e: Exception) {
+                when (e) {
+                    is AIError -> throw e
+                    else -> throw AIError.ProviderError(
+                        statusCode = 500,
+                        message = e.message ?: "Unknown error",
+                        provider = "openai"
+                    )
+                }
+            }
+        }
+    }
+}
