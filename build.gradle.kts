@@ -11,6 +11,12 @@ repositories {
     mavenCentral()
 }
 
+// Define configurations for integration tests
+val integrationTestSourceSet by sourceSets.creating {
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+}
+
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
@@ -24,6 +30,7 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
     implementation("org.json:json:20231013")
     
+    // Unit test dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.0.0")
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.3")
@@ -31,58 +38,74 @@ dependencies {
     testImplementation("io.ktor:ktor-client-mock:2.3.6")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("org.slf4j:slf4j-simple:2.0.7")
+    
+    // Integration test dependencies - explicitly defined
+    "integrationTestSourceSetImplementation"("org.jetbrains.kotlin:kotlin-test:2.0.0")
+    "integrationTestSourceSetImplementation"("org.jetbrains.kotlin:kotlin-test-junit5:2.0.0")
+    "integrationTestSourceSetImplementation"("org.junit.jupiter:junit-jupiter:5.9.3")
+    "integrationTestSourceSetImplementation"("io.mockk:mockk:1.13.5")
+    "integrationTestSourceSetImplementation"("io.ktor:ktor-client-mock:2.3.6")
+    "integrationTestSourceSetImplementation"("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    "integrationTestSourceSetImplementation"("org.slf4j:slf4j-simple:2.0.7")
 }
 
-sourceSets {
-    create("integrationTest") {
-        kotlin {
-            compileClasspath += sourceSets.main.get().output + sourceSets.test.get().output
-            runtimeClasspath += sourceSets.main.get().output + sourceSets.test.get().output
-        }
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+    
+    // Common test configuration
+    maxParallelForks = Runtime.getRuntime().availableProcessors().div(2).takeIf { it > 0 } ?: 1
+    
+    testLogging {
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+        showExceptions = true
+        showStackTraces = true
+        showCauses = true
+        showStandardStreams = true
     }
 }
 
-val integrationTestImplementation by configurations.getting {
-    extendsFrom(configurations.testImplementation.get())
-}
-
-tasks.register<Test>("integrationTest") {
-    description = "Runs integration tests."
-    group = "verification"
-
-    testClassesDirs = sourceSets["integrationTest"].output.classesDirs
-    classpath = sourceSets["integrationTest"].runtimeClasspath
-    useJUnitPlatform()
-
-    mustRunAfter(tasks.test)
-    
-    systemProperty("junit.jupiter.execution.parallel.enabled", "true")
-    maxParallelForks = Runtime.getRuntime().availableProcessors().div(2).takeIf { it > 0 } ?: 1
-}
-
+// Unit test specific configuration
 tasks.test {
-    useJUnitPlatform()
+    description = "Runs unit tests."
     
-    // Configure test execution
-    maxParallelForks = Runtime.getRuntime().availableProcessors().div(2).takeIf { it > 0 } ?: 1
-    
-    // Configure timeouts
+    // Configure timeouts for unit tests
     systemProperty("junit.jupiter.execution.timeout.default", "30s")
     systemProperty("junit.jupiter.execution.timeout.testable.method.default", "30s")
     
     // Enable ByteBuddy experimental support for Java 21
     jvmArgs("-Dnet.bytebuddy.experimental=true")
     
-    // Configure test logging
-    testLogging {
-        events("passed", "skipped", "failed", "standardOut", "standardError")
-        showExceptions = true
-        showStackTraces = true
-        showCauses = true
-        
-        // Log test execution time
-        showStandardStreams = true
+    filter {
+        // Exclude integration tests from unit test task
+        excludeTestsMatching("*.integration.*")
     }
+}
+
+// Integration test configuration
+val runIntegrationTests by tasks.registering(Test::class) {
+    description = "Runs integration tests."
+    group = "verification"
+    
+    testClassesDirs = integrationTestSourceSet.output.classesDirs
+    classpath = integrationTestSourceSet.runtimeClasspath
+    
+    // Integration test specific settings
+    systemProperty("junit.jupiter.execution.timeout.default", "60s")
+    systemProperty("junit.jupiter.execution.timeout.testable.method.default", "60s")
+    systemProperty("junit.jupiter.execution.parallel.enabled", "true")
+    
+    // Enable ByteBuddy experimental support for Java 21
+    jvmArgs("-Dnet.bytebuddy.experimental=true")
+    
+    // Only run tests in integration test packages
+    filter {
+        includeTestsMatching("*.integration.*")
+    }
+    
+    mustRunAfter(tasks.test)
+    
+    // Ensure integration tests are always run if explicitly requested
+    outputs.upToDateWhen { false }
 }
 
 kotlin {
