@@ -29,6 +29,7 @@ dependencies {
     testImplementation("io.mockk:mockk:1.13.5")
     testImplementation("io.ktor:ktor-client-mock:2.3.6")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("org.slf4j:slf4j-simple:2.0.7")
 }
 
 sourceSets {
@@ -60,6 +61,24 @@ tasks.register<Test>("integrationTest") {
 
 tasks.test {
     useJUnitPlatform()
+    
+    // Configure test execution
+    maxParallelForks = Runtime.getRuntime().availableProcessors().div(2).takeIf { it > 0 } ?: 1
+    
+    // Configure timeouts
+    systemProperty("junit.jupiter.execution.timeout.default", "30s")
+    systemProperty("junit.jupiter.execution.timeout.testable.method.default", "30s")
+    
+    // Configure test logging
+    testLogging {
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+        showExceptions = true
+        showStackTraces = true
+        showCauses = true
+        
+        // Log test execution time
+        showStandardStreams = true
+    }
 }
 
 kotlin {

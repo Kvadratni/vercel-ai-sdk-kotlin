@@ -9,10 +9,11 @@ import dev.vercel.ai.options.ProviderOptions
 import dev.vercel.ai.stream.AIStream
 import dev.vercel.ai.tools.CallableTool
 import kotlinx.coroutines.flow.Flow
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import io.ktor.client.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 
 /**
@@ -21,10 +22,14 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 class AnthropicProvider(
     private val apiKey: String,
     private val baseUrl: String = "https://api.anthropic.com/v1",
-    private val client: OkHttpClient = OkHttpClient()
+    private val httpClient: HttpClient = HttpClient {
+        install(ContentNegotiation) {
+            json()
+        }
+    }
 ) : AIModel {
     private val mapper = jacksonObjectMapper()
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val jsonMediaType = ContentType.Application.Json
 
     override suspend fun complete(
         prompt: String,
@@ -41,25 +46,16 @@ class AnthropicProvider(
         }.filterValues { it != null }
 
         return RetryHandler.withRetry {
-            val request = Request.Builder()
-                .url("$baseUrl/complete")
-                .post(mapper.writeValueAsString(requestBody).toRequestBody(jsonMediaType))
-                .header("X-API-Key", apiKey)
-                .header("Accept", "text/event-stream")
-                .build()
+            val response = httpClient.post("$baseUrl/complete") {
+                contentType(jsonMediaType)
+                header("X-API-Key", apiKey)
+                header("Accept", "text/event-stream")
+                setBody(mapper.writeValueAsString(requestBody))
+            }
 
-            try {
-                val response = client.newCall(request).execute()
-                AIStream.fromResponse(response)
-            } catch (e: Exception) {
-                throw when (e) {
-                    is AIError -> e
-                    else -> AIError.ProviderError(
-                        statusCode = 500,
-                        message = e.message ?: "Unknown error",
-                        provider = "anthropic"
-                    )
-                }
+            AIStream.fromResponse(response) { data ->
+                // Parse the data string and extract content
+                data
             }
         }
     }

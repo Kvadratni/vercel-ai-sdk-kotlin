@@ -5,7 +5,6 @@ import dev.vercel.ai.errors.AIError
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.isSuccess
-import io.ktor.utils.io.core.readText
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import okhttp3.Response

@@ -22,7 +22,7 @@ class FunctionCallTest {
     @Test
     fun `chat should handle function calls correctly`() = runBlocking {
         val mockClient = mockk<OkHttpClient>()
-        val mockResponse = mockk<Response>()
+        val mockResponse = mockk<Response>(relaxed = true)
         
         // Mock response with function call
         every { mockResponse.code } returns 200

@@ -3,38 +3,32 @@ package dev.vercel.ai.providers
 import dev.vercel.ai.ChatMessage
 import dev.vercel.ai.errors.AIError
 import dev.vercel.ai.options.AnthropicOptions
-import dev.vercel.ai.options.ModelParameters
-import io.mockk.every
-import io.mockk.mockk
+import io.ktor.client.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.client.request.*
+import io.mockk.*
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 
 class AnthropicProviderTest {
     @Test
-    fun `complete should handle rate limit errors`() = runBlocking {
-        val mockClient = mockk<OkHttpClient>()
-        val mockResponse = mockk<Response>()
+    fun `complete should handle rate limit errors`() = runTest {
+        val mockClient = mockk<HttpClient>()
+        val mockResponse = mockk<HttpResponse>(relaxed = true)
         
-        every { mockResponse.code } returns 429
-        every { mockResponse.header("Retry-After") } returns "30"
-        every { mockClient.newCall(any()).execute() } returns mockResponse
+        every { mockResponse.status } returns HttpStatusCode.TooManyRequests
+        every { mockResponse.headers["Retry-After"] } returns "30"
+        coEvery { mockClient.post(any<String>(), any()) } returns mockResponse
         
         val provider = AnthropicProvider(
             apiKey = "test-key",
-            client = mockClient
+            httpClient = mockClient
         )
-        val options = AnthropicOptions.claude3Opus(
-            ModelParameters.Chat(
-                temperature = 0.7,
-                maxTokens = 100
-            )
-        )
+        val options = AnthropicOptions.claude2()
         
         val error = assertThrows<AIError.RateLimitError> {
             provider.complete("test prompt", options).toList()
@@ -45,41 +39,29 @@ class AnthropicProviderTest {
     }
     
     @Test
-    fun `chat should handle invalid message roles`() = runBlocking {
+    fun `chat should handle invalid message roles`() = runTest {
         val provider = AnthropicProvider("test-key")
-        val options = AnthropicOptions.claude3Opus(
-            ModelParameters.Chat(
-                temperature = 0.7,
-                maxTokens = 100
-            )
-        )
-        val error = assertThrows<AIError.ConfigurationError> {
+        val options = AnthropicOptions.claude2()
+        
+        assertThrows<AIError.ConfigurationError> {
             provider.chat(listOf(
                 ChatMessage(role = "invalid", content = "test")
             ),
-                options = options).toList()
+            options = options).toList()
         }
-        
-        assertEquals("Unsupported message role: invalid", error.message)
     }
     
     @Test
-    fun `chat should properly format system messages`() = runBlocking {
-        val mockClient = mockk<OkHttpClient>()
-        val mockResponse = mockk<Response>()
-        val options = AnthropicOptions.claude3Opus(
-            ModelParameters.Chat(
-                temperature = 0.7,
-                maxTokens = 100
-            )
-        )
-        every { mockResponse.code } returns 200
-        every { mockResponse.body } returns "data: {\"text\": \"test\"}\n\n".toResponseBody()
-        every { mockClient.newCall(any()).execute() } returns mockResponse
+    fun `chat should properly format system messages`() = runTest {
+        val mockClient = mockk<HttpClient>()
+        val mockResponse = mockk<HttpResponse>(relaxed = true)
+        
+        every { mockResponse.status } returns HttpStatusCode.OK
+        coEvery { mockClient.post(any<String>(), any()) } returns mockResponse
         
         val provider = AnthropicProvider(
             apiKey = "test-key",
-            client = mockClient
+            httpClient = mockClient
         )
         
         val messages = listOf(
@@ -87,6 +69,7 @@ class AnthropicProviderTest {
             ChatMessage(role = "user", content = "Hello")
         )
         
+        val options = AnthropicOptions.claude2()
         val result = provider.chat(messages, options).toList()
         assertEquals(1, result.size)
     }

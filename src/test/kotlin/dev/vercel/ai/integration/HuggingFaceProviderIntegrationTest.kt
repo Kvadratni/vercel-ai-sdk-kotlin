@@ -5,6 +5,9 @@ import dev.vercel.ai.options.HuggingFaceOptions
 import dev.vercel.ai.options.ModelParameters
 import dev.vercel.ai.errors.AIError
 import dev.vercel.ai.providers.HuggingFaceProvider
+import io.ktor.client.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -67,7 +70,12 @@ class HuggingFaceProviderIntegrationTest : BaseIntegrationTest() {
         // Create provider with invalid API key to trigger rate limit
         val invalidProvider = HuggingFaceProvider(
             apiKey = "invalid-key",
-            baseUrl = properties.getProperty("huggingface.base.url")
+            baseUrl = properties.getProperty("huggingface.base.url"),
+            httpClient = HttpClient {
+                install(ContentNegotiation) {
+                    json()
+                }
+            }
         )
         
         val options = HuggingFaceOptions.gpt2()

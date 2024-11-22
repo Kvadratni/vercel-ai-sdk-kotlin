@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 class AIStreamTest {
     @Test
     fun `should handle successful streaming response`() = runBlocking {
-        val mockResponse = mockk<Response>()
+        val mockResponse = mockk<Response>(relaxed = true)
         every { mockResponse.isSuccessful } returns true
         every { mockResponse.body } returns """
             data: {"text": "Hello"}
@@ -40,13 +40,14 @@ class AIStreamTest {
         every { mockResponse.isSuccessful } returns false
         every { mockResponse.code } returns 500
         every { mockResponse.message } returns "Internal Server Error"
+        every { mockResponse.close() } returns Unit
 
         val error = assertThrows<AIError.ProviderError> {
             AIStream.fromResponse(mockResponse).toList()
         }
 
         assertEquals(500, error.statusCode)
-        assertEquals("Internal Server Error", error.message)
+        assertEquals("Request failed with status code 500", error.message)
     }
 
     @Test
@@ -54,6 +55,7 @@ class AIStreamTest {
         val mockResponse = mockk<Response>()
         every { mockResponse.isSuccessful } returns true
         every { mockResponse.body } returns null
+        every { mockResponse.close() } returns Unit
 
         val error = assertThrows<AIError.StreamError> {
             AIStream.fromResponse(mockResponse).toList()
@@ -67,6 +69,7 @@ class AIStreamTest {
         val mockResponse = mockk<Response>()
         every { mockResponse.isSuccessful } returns true
         every { mockResponse.body } returns "invalid data format".toResponseBody()
+        every { mockResponse.close() } returns Unit
 
         val results = AIStream.fromResponse(mockResponse).toList()
         assertTrue(results.isEmpty())

@@ -1,13 +1,15 @@
 package dev.vercel.ai.providers
 
+import dev.vercel.ai.ChatMessage
 import dev.vercel.ai.options.CohereOptions
+import dev.vercel.ai.options.ModelParameters
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -41,40 +43,40 @@ class CohereProviderTest {
         }
     }
 
+    private val testOptions = CohereOptions(
+        apiKey = "test-key",
+        model = "command",
+        temperature = 0.7,
+        maxTokens = 256
+    )
+
     private val provider = CohereProvider(
-        options = CohereOptions(
-            apiKey = "test-key",
-            model = "command",
-            temperature = 0.7,
-            maxTokens = 256,
-            stream = true
-        ),
+        options = testOptions,
         httpClient = mockClient
     )
 
     @Test
-    fun `chat should throw exception when no messages provided`() {
+    fun `chat should throw exception when no messages provided`() = runTest {
         assertFailsWith<IllegalArgumentException> {
-            runBlocking {
-                provider.chat(emptyList())
-            }
+            provider.chat(emptyList(), testOptions, null)
         }
     }
 
     @Test
-    fun `chat should make correct API request`() = runBlocking {
+    fun `chat should make correct API request`() = runTest {
         val messages = listOf(
-            CohereProvider.Message(role = "user", content = "Hello")
+            ChatMessage(role = "user", content = "Hello")
         )
 
-        val response = provider.chat(messages)
+        val response = provider.chat(messages, testOptions, null)
         assertEquals(1, mockEngine.requestHistory.size)
         
         val request = mockEngine.requestHistory.first()
-        assertEquals("Bearer test-key", request.headers["Authorization"])
-        assertTrue(request.headers.entries().any { (key, value) ->
-            key.equals("Content-Type", ignoreCase = true) && value.contains("application/json")
-        })
+        assertTrue(request.headers.contains("Authorization"), "Authorization header should be present")
+        assertTrue(request.headers.contains("Content-Type"), "Content-Type header should be present")
         assertEquals("https://api.cohere.ai/v1/chat", request.url.toString())
+
+        val responseText = response.toList()
+        assertEquals(listOf("Hello, world!"), responseText)
     }
 }

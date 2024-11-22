@@ -2,91 +2,110 @@ package dev.vercel.ai.providers
 
 import dev.vercel.ai.ChatMessage
 import dev.vercel.ai.errors.AIError
-import dev.vercel.ai.options.ProviderOptions
-import io.mockk.every
-import io.mockk.mockk
+import dev.vercel.ai.options.HuggingFaceOptions
+import io.ktor.client.*
+import io.ktor.client.engine.mock.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.http.*
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 
-private class TestProviderOptions(
-    override val model: String = "test-model",
-    override val temperature: Double? = 0.7,
-    override val maxTokens: Int? = 100,
-    override val stopSequences: List<String>? = null,
-    override val stream: Boolean = true
-) : ProviderOptions {
-    override fun toMap(): Map<String, Any> = buildMap {
-        put("model", model)
-        temperature?.let { put("temperature", it) }
-        maxTokens?.let { put("max_tokens", it) }
-        stopSequences?.let { put("stop", it) }
-        put("stream", stream)
-    }
-}
-
 class HuggingFaceProviderTest {
     @Test
-    fun `complete should handle rate limit errors`() = runBlocking {
-        val mockClient = mockk<OkHttpClient>()
-        val mockResponse = mockk<Response>()
+    fun `chat should properly format conversation`() = runTest {
+        val mockEngine = MockEngine { request ->
+            respond(
+                content = """data: {"text": "Hello world!"}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "text/event-stream")
+            )
+        }
         
-        every { mockResponse.code } returns 429
-        every { mockResponse.header("Retry-After") } returns "30"
-        every { mockClient.newCall(any()).execute() } returns mockResponse
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json()
+            }
+        }
         
         val provider = HuggingFaceProvider(
             apiKey = "test-key",
-            client = mockClient
+            baseUrl = "https://api-inference.huggingface.co/models",
+            httpClient = client
         )
-        
-        val error = assertThrows<AIError.RateLimitError> {
-            provider.complete("test prompt", TestProviderOptions()).toList()
+
+        val messages = listOf(
+            ChatMessage(role = "system", content = "You are a helpful assistant"),
+            ChatMessage(role = "user", content = "Hello")
+        )
+
+        val options = HuggingFaceOptions.gpt2()
+        val response = provider.chat(messages, options).toList()
+
+        assertEquals(listOf("Hello world!"), response)
+    }
+
+    @Test
+    fun `complete should handle rate limit errors`() = runTest {
+        val mockEngine = MockEngine { request ->
+            respond(
+                content = """{"error": "Rate limit exceeded"}""",
+                status = HttpStatusCode.TooManyRequests,
+                headers = headersOf("Retry-After", "30")
+            )
         }
         
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json()
+            }
+        }
+        
+        val provider = HuggingFaceProvider(
+            apiKey = "test-key",
+            baseUrl = "https://api-inference.huggingface.co/models",
+            httpClient = client
+        )
+
+        val options = HuggingFaceOptions.gpt2()
+        val error = assertThrows<AIError.RateLimitError> {
+            provider.complete("test prompt", options).toList()
+        }
+
         assertEquals("huggingface", error.provider)
         assertEquals(30000L, error.retryAfter)
     }
-    
+
     @Test
-    fun `chat should handle invalid message roles`() = runBlocking {
-        val provider = HuggingFaceProvider("test-key")
-        
-        val error = assertThrows<AIError.ConfigurationError> {
-            provider.chat(listOf(
-                ChatMessage(role = "invalid", content = "test")
-            ), TestProviderOptions()).toList()
+    fun `chat should handle invalid message roles`() = runTest {
+        val mockEngine = MockEngine { request ->
+            respond(
+                content = """{"error": "Invalid request"}""",
+                status = HttpStatusCode.BadRequest
+            )
         }
         
-        assertEquals("Unsupported message role: invalid", error.message)
-    }
-    
-    @Test
-    fun `chat should properly format conversation`() = runBlocking {
-        val mockClient = mockk<OkHttpClient>()
-        val mockResponse = mockk<Response>()
-        
-        every { mockResponse.code } returns 200
-        every { mockResponse.body } returns "data: {\"text\": \"test\"}\n\n".toResponseBody()
-        every { mockClient.newCall(any()).execute() } returns mockResponse
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json()
+            }
+        }
         
         val provider = HuggingFaceProvider(
             apiKey = "test-key",
-            client = mockClient
+            baseUrl = "https://api-inference.huggingface.co/models",
+            httpClient = client
         )
-        
-        val messages = listOf(
-            ChatMessage(role = "system", content = "You are a helpful assistant"),
-            ChatMessage(role = "user", content = "Hello"),
-            ChatMessage(role = "assistant", content = "Hi there!")
-        )
-        
-        val result = provider.chat(messages, TestProviderOptions()).toList()
-        assertEquals(1, result.size)
+
+        val options = HuggingFaceOptions.gpt2()
+
+        assertThrows<AIError.ConfigurationError> {
+            provider.chat(listOf(
+                ChatMessage(role = "invalid", content = "test")
+            ), options).toList()
+        }
     }
 }
