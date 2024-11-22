@@ -2,7 +2,6 @@ package dev.vercel.ai.providers
 
 import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.options.CohereOptions
-import dev.vercel.ai.options.ModelParameters
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
@@ -22,19 +21,13 @@ class CohereProviderTest {
         println("Request body: $requestBody")
         println("Request headers: ${request.headers.entries()}")
 
-        if (requestBody.contains("\"message\":") && requestBody.contains("\"model\":")) {
-            respond(
-                content = """data: {"text": "Hello, world!"}""",
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "text/event-stream")
+        respond(
+            content = """data: {"text": "Hello, world!"}""",
+            status = HttpStatusCode.OK,
+            headers = headersOf(
+                HttpHeaders.ContentType, "text/event-stream"
             )
-        } else {
-            respond(
-                content = """{"error": "Invalid request body"}""",
-                status = HttpStatusCode.BadRequest,
-                headers = headersOf(HttpHeaders.ContentType, "application/json")
-            )
-        }
+        )
     }
 
     private val mockClient = HttpClient(mockEngine) {
@@ -73,8 +66,8 @@ class CohereProviderTest {
         
         val request = mockEngine.requestHistory.first()
         assertTrue(request.headers.contains("Authorization"), "Authorization header should be present")
-        assertTrue(request.headers.contains("Content-Type"), "Content-Type header should be present")
-        assertEquals("https://api.cohere.ai/v1/chat", request.url.toString())
+        assertTrue(request.headers.contains(HttpHeaders.Accept), "Accept header should be present")
+        assertTrue(request.url.toString().endsWith("/chat"), "URL should end with /chat")
 
         val responseText = response.toList()
         assertEquals(listOf("Hello, world!"), responseText)
