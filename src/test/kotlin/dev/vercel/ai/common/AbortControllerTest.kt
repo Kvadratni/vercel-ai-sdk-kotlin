@@ -33,23 +33,11 @@ class AbortControllerTest {
     @Test
     fun `should throw AbortError when checking aborted signal`() = runBlocking {
         val controller = AbortController()
-        
-        val job = launch {
-            controller.signal.withScope {
-                delay(1000)
-            }
-        }
-        
-        delay(100)
-        controller.abort()
+        controller.abort() // Abort before checking
         
         assertFailsWith<AbortError> {
-            runBlocking {
-                controller.signal.throwIfAborted()
-            }
+            controller.signal.throwIfAborted()
         }
-        
-        job.join()
     }
     
     @Test

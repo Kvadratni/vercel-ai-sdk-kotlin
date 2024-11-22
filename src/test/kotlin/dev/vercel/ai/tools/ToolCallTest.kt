@@ -1,6 +1,6 @@
 package dev.vercel.ai.tools
 
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.options.ModelParameters
 import dev.vercel.ai.options.OpenAIOptions
 import dev.vercel.ai.providers.OpenAIProvider

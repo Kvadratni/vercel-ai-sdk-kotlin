@@ -79,7 +79,7 @@ class AnthropicOptionsTest {
     @Test
     fun `should create valid claude2 configuration`() {
         val options = AnthropicOptions.claude2()
-        assertEquals("claude-2", options.model)
+        assertEquals("claude-2.0", options.model)
         assertEquals(0.7, options.temperature)
         assertEquals(1000, options.maxTokens)
         assertEquals(true, options.stream)

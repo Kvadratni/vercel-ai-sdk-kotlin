@@ -1,10 +1,11 @@
 package dev.vercel.ai.providers
 
 import dev.vercel.ai.AIModel
-import dev.vercel.ai.ChatMessage
 import dev.vercel.ai.common.AbortSignal
 import dev.vercel.ai.errors.AIError
 import dev.vercel.ai.errors.RetryHandler
+import dev.vercel.ai.models.ChatMessage
+import dev.vercel.ai.models.ToolCall
 import dev.vercel.ai.options.ProviderOptions
 import dev.vercel.ai.stream.AIStream
 import dev.vercel.ai.tools.CallableTool
@@ -14,6 +15,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import kotlinx.serialization.json.JsonObject
 
 /**
  * OpenAI provider implementation for the Vercel AI SDK
@@ -71,11 +73,29 @@ class OpenAIProvider(
                 put("role", message.role)
                 put("content", message.content)
                 message.name?.let { put("name", it) }
+                
+                // Handle function calls
                 message.functionCall?.let { functionCall ->
                     put("function_call", mapOf(
                         "name" to functionCall.name,
                         "arguments" to functionCall.arguments
                     ))
+                }
+                
+                // Handle tool calls
+                message.toolCalls?.let { toolCalls ->
+                    put("tool_calls", toolCalls.map { toolCall ->
+                        when (toolCall) {
+                            is ToolCall.Function -> mapOf(
+                                "id" to toolCall.id,
+                                "type" to toolCall.type,
+                                "function" to mapOf(
+                                    "name" to toolCall.name,
+                                    "arguments" to toolCall.arguments
+                                )
+                            )
+                        }
+                    })
                 }
             }.filterValues { it != null }
         }
@@ -84,7 +104,21 @@ class OpenAIProvider(
             put("messages", formattedMessages)
             put("stream", true)
             
+            // Handle tools configuration
             tools?.let { toolList ->
+                // First try to use the newer tools format
+                put("tools", toolList.map { tool ->
+                    mapOf<String, Any>(
+                        "type" to "function",
+                        "function" to mapOf(
+                            "name" to tool.definition.function.name,
+                            "description" to tool.definition.function.description,
+                            "parameters" to tool.definition.function.parameters
+                        )
+                    )
+                })
+                
+                // Also include functions for backward compatibility
                 put("functions", toolList.map { tool ->
                     mapOf<String, Any>(
                         "name" to tool.definition.function.name,

@@ -9,7 +9,7 @@ import kotlinx.coroutines.coroutineScope
  * Kotlin implementation of the AbortController pattern
  */
 class AbortController {
-    private var job: Job? = null
+    internal var job: Job? = null
     
     /**
      * Signal for checking if the operation has been aborted
@@ -33,6 +33,11 @@ class AbortController {
  * Signal that can be used to check if an operation has been aborted
  */
 class AbortSignal(private val controller: AbortController) {
+    /**
+     * Whether the signal has been aborted
+     */
+    val isAborted: Boolean
+        get() = controller.job?.isCancelled == true
     /**
      * Throws if the operation has been aborted
      */
