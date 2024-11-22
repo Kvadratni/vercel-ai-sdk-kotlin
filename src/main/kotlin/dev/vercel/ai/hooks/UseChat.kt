@@ -22,7 +22,7 @@ class UseChat(
     private val tools: List<CallableTool>? = null
 ) {
     private val messages = mutableListOf<ChatMessage>()
-    private val abortController = AbortController()
+    private var currentController: AbortController? = null
     
     /**
      * Send a message to the chat and receive a streaming response
@@ -33,19 +33,23 @@ class UseChat(
      */
     suspend fun sendMessage(message: String, systemPrompt: String? = null): Flow<String> {
         // Add system prompt if provided
-        systemPrompt?.let {
-            messages.add(ChatMessage(content = it, role = "system"))
+        if (systemPrompt != null && messages.isEmpty()) {
+            messages.add(ChatMessage(content = systemPrompt, role = "system"))
         }
         
         // Add user message
         messages.add(ChatMessage(content = message, role = "user"))
+        
+        // Create a new controller for this request
+        val requestController = AbortController()
+        currentController = requestController
         
         // Get response stream
         return model.chat(
             messages = messages.toList(),
             options = options,
             tools = tools,
-            signal = abortController.signal
+            signal = requestController.signal
         ).map { chunk ->
             // Accumulate assistant response
             if (chunk.isNotEmpty()) {
@@ -65,6 +69,9 @@ class UseChat(
                 if (messages.lastOrNull()?.role == "assistant") {
                     messages.removeLast()
                 }
+            }
+            if (currentController === requestController) {
+                currentController = null
             }
         }
     }
@@ -87,6 +94,7 @@ class UseChat(
      * Abort the current chat request if any
      */
     fun abort() {
-        abortController.abort()
+        currentController?.abort()
+        currentController = null
     }
 }

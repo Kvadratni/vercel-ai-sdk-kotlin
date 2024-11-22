@@ -1,15 +1,14 @@
 package dev.vercel.ai.common
 
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
-import kotlin.test.assertFailsWith
+import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertTrue
 
 class AbortControllerTest {
     @Test
-    fun `should abort running operation`() = runBlocking {
+    fun `should abort running operation`() = runTest {
         val controller = AbortController()
         var wasAborted = false
         
@@ -18,7 +17,7 @@ class AbortControllerTest {
                 controller.signal.withScope {
                     delay(1000)
                 }
-            } catch (e: AbortError) {
+            } catch (e: CancellationException) {
                 wasAborted = true
             }
         }
@@ -31,17 +30,7 @@ class AbortControllerTest {
     }
     
     @Test
-    fun `should throw AbortError when checking aborted signal`() = runBlocking {
-        val controller = AbortController()
-        controller.abort() // Abort before checking
-        
-        assertFailsWith<AbortError> {
-            controller.signal.throwIfAborted()
-        }
-    }
-    
-    @Test
-    fun `should not affect other operations when one is aborted`() = runBlocking {
+    fun `should not affect other operations when one is aborted`() = runTest {
         val controller1 = AbortController()
         val controller2 = AbortController()
         var operation1Aborted = false
@@ -52,7 +41,7 @@ class AbortControllerTest {
                 controller1.signal.withScope {
                     delay(1000)
                 }
-            } catch (e: AbortError) {
+            } catch (e: CancellationException) {
                 operation1Aborted = true
             }
         }

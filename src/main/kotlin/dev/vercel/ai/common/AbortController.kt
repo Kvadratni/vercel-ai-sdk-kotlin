@@ -9,7 +9,8 @@ import kotlinx.coroutines.coroutineScope
  * Kotlin implementation of the AbortController pattern
  */
 class AbortController {
-    internal var job: Job? = null
+    private var _isAborted = false
+    private var job: Job? = null
     
     /**
      * Signal for checking if the operation has been aborted
@@ -21,12 +22,15 @@ class AbortController {
      * Aborts the current operation
      */
     fun abort() {
-        job?.cancel(AbortError())
+        _isAborted = true
+        job?.cancel(CancellationException("Operation aborted"))
     }
     
     internal fun attachJob(newJob: Job) {
         job = newJob
     }
+
+    internal fun isAborted() = _isAborted
 }
 
 /**
@@ -37,13 +41,16 @@ class AbortSignal(private val controller: AbortController) {
      * Whether the signal has been aborted
      */
     val isAborted: Boolean
-        get() = controller.job?.isCancelled == true
+        get() = controller.isAborted()
+
     /**
      * Throws if the operation has been aborted
      */
-    @Throws(AbortError::class)
-    suspend fun throwIfAborted() {
-        // Implementation will check the job status
+    @Throws(CancellationException::class)
+    fun throwIfAborted() {
+        if (isAborted) {
+            throw CancellationException("Operation aborted")
+        }
     }
     
     /**
@@ -51,11 +58,13 @@ class AbortSignal(private val controller: AbortController) {
      */
     suspend fun withScope(block: suspend () -> Unit) = coroutineScope {
         controller.attachJob(coroutineContext[Job]!!)
-        block()
+        try {
+            block()
+        } catch (e: Exception) {
+            if (e is CancellationException) {
+                throw e
+            }
+            throw e
+        }
     }
 }
-
-/**
- * Error thrown when an operation is aborted
- */
-class AbortError : CancellationException("The operation was aborted")

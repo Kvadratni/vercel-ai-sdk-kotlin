@@ -2,7 +2,6 @@ package dev.vercel.ai.providers
 
 import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.common.AbortController
-import dev.vercel.ai.common.AbortError
 import dev.vercel.ai.errors.AIError
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest

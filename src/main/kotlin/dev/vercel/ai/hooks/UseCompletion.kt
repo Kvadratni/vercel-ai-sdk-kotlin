@@ -20,7 +20,7 @@ class UseCompletion(
 ) {
     private var lastMessage: CompletionMessage? = null
     private var lastResponse: CompletionMessage? = null
-    private val abortController = AbortController()
+    private var currentController: AbortController? = null
     
     /**
      * Send a prompt to the model and receive a streaming response
@@ -33,11 +33,15 @@ class UseCompletion(
         lastMessage = CompletionMessage(content = prompt)
         lastResponse = null
         
+        // Create a new AbortController for this request
+        val requestController = AbortController()
+        currentController = requestController
+        
         // Get response stream
         return model.complete(
             prompt = prompt,
             options = options,
-            signal = abortController.signal
+            signal = requestController.signal
         ).map { chunk ->
             // Accumulate assistant response
             if (chunk.isNotEmpty()) {
@@ -52,6 +56,9 @@ class UseCompletion(
             if (error != null) {
                 // Clear response on error
                 lastResponse = null
+            }
+            if (currentController === requestController) {
+                currentController = null
             }
         }
     }
@@ -82,6 +89,7 @@ class UseCompletion(
      * Abort the current completion request if any
      */
     fun abort() {
-        abortController.abort()
+        currentController?.abort()
+        currentController = null
     }
 }
