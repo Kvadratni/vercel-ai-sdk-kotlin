@@ -78,10 +78,12 @@ class HuggingFaceProvider(
             }
 
             AIStream.fromResponse(response, signal) { data ->
-                // Parse the data string and extract content
-                val jsonElement = Json.parseToJsonElement(data)
-                jsonElement.jsonObject["token"]?.jsonObject?.get("text")?.jsonPrimitive?.content
-                    ?: throw AIError.StreamError("Invalid response format", null)
+                try {
+                    val jsonElement = Json.parseToJsonElement(data)
+                    jsonElement.jsonObject["token"]?.jsonObject?.get("text")?.jsonPrimitive?.content
+                } catch (e: Exception) {
+                    null
+                }
             }
         }
     }

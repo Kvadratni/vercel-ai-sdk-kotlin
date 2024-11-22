@@ -5,7 +5,6 @@ import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.common.AbortSignal
 import dev.vercel.ai.errors.AIError
 import dev.vercel.ai.errors.RetryHandler
-import dev.vercel.ai.stream.AIStream
 import dev.vercel.ai.options.CohereOptions
 import dev.vercel.ai.options.ProviderOptions
 import dev.vercel.ai.tools.CallableTool

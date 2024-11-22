@@ -14,7 +14,6 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.headers
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
-import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -155,10 +154,13 @@ class AzureOpenAIProvider(
             }
 
             return AIStream.fromResponse(response, signal) { content ->
-                val jsonElement = Json.parseToJsonElement(content)
-                jsonElement.jsonObject["choices"]?.jsonArray?.firstOrNull()
-                    ?.jsonObject?.get("delta")?.jsonObject?.get("content")?.jsonPrimitive?.content
-                    ?: throw AIError.StreamError("Invalid response format", null)
+                try {
+                    val jsonElement = Json.parseToJsonElement(content)
+                    jsonElement.jsonObject["choices"]?.jsonArray?.firstOrNull()
+                        ?.jsonObject?.get("delta")?.jsonObject?.get("content")?.jsonPrimitive?.content
+                } catch (e: Exception) {
+                    null
+                }
             }
         } catch (e: Exception) {
             when (e) {

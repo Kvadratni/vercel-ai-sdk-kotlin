@@ -9,13 +9,11 @@ import dev.vercel.ai.models.ToolCall
 import dev.vercel.ai.options.ProviderOptions
 import dev.vercel.ai.stream.AIStream
 import dev.vercel.ai.tools.CallableTool
+import io.ktor.client.*
+import io.ktor.client.request.*
+import io.ktor.http.*
 import kotlinx.coroutines.flow.Flow
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import kotlinx.serialization.json.JsonObject
 
 /**
  * OpenAI provider implementation for the Vercel AI SDK
@@ -23,10 +21,9 @@ import kotlinx.serialization.json.JsonObject
 class OpenAIProvider(
     private val apiKey: String,
     private val baseUrl: String = "https://api.openai.com/v1",
-    private val client: OkHttpClient = OkHttpClient()
+    private val httpClient: HttpClient = HttpClient()
 ) : AIModel {
     private val mapper = jacksonObjectMapper()
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     override suspend fun complete(
         prompt: String,
@@ -39,15 +36,13 @@ class OpenAIProvider(
         }
 
         return RetryHandler.withRetry {
-            val request = Request.Builder()
-                .url("$baseUrl/completions")
-                .post(mapper.writeValueAsString(requestBody).toRequestBody(jsonMediaType))
-                .header("Authorization", "Bearer $apiKey")
-                .header("Accept", "text/event-stream")
-                .build()
-
             try {
-                val response = client.newCall(request).execute()
+                val response = httpClient.post("$baseUrl/completions") {
+                    contentType(ContentType.Application.Json)
+                    header("Authorization", "Bearer $apiKey")
+                    header("Accept", "text/event-stream")
+                    setBody(mapper.writeValueAsString(requestBody))
+                }
                 AIStream.fromResponse(response)
             } catch (e: Exception) {
                 throw when (e) {
@@ -130,15 +125,13 @@ class OpenAIProvider(
         }
 
         return RetryHandler.withRetry {
-            val request = Request.Builder()
-                .url("$baseUrl/chat/completions")
-                .post(mapper.writeValueAsString(requestBody).toRequestBody(jsonMediaType))
-                .header("Authorization", "Bearer $apiKey")
-                .header("Accept", "text/event-stream")
-                .build()
-
             try {
-                val response = client.newCall(request).execute()
+                val response = httpClient.post("$baseUrl/chat/completions") {
+                    contentType(ContentType.Application.Json)
+                    header("Authorization", "Bearer $apiKey")
+                    header("Accept", "text/event-stream")
+                    setBody(mapper.writeValueAsString(requestBody))
+                }
                 AIStream.fromResponse(response)
             } catch (e: Exception) {
                 throw when (e) {

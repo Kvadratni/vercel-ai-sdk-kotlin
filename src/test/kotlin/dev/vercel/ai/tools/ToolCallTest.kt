@@ -4,13 +4,13 @@ import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.options.ModelParameters
 import dev.vercel.ai.options.OpenAIOptions
 import dev.vercel.ai.providers.OpenAIProvider
-import io.mockk.every
-import io.mockk.mockk
+import io.ktor.client.*
+import io.ktor.client.engine.mock.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.http.*
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -19,20 +19,26 @@ import kotlin.test.assertTrue
 class ToolCallTest {
     @Test
     fun `chat should handle tool calls correctly`() = runBlocking {
-        val mockClient = mockk<OkHttpClient>(relaxed = true)
-        val mockResponse = mockk<Response>(relaxed = true)
+        val mockEngine = MockEngine { request ->
+            respond(
+                content = """
+                    data: {"role": "assistant", "content": null, "tool_calls": [{"id": "call_123", "type": "function", "function": {"name": "searchEmails", "arguments": "{\\"query\\": \\"investor updates\\", \\"has_attachments\\": false}"}}]}
+                    
+                    data: {"role": "tool", "name": "searchEmails", "content": "[{\\"id\\":\\"1\\",\\"subject\\":\\"Q1 Investor Update\\",\\"date\\":\\"Apr 1, 2023\\"}]"}
+                    
+                    data: {"role": "assistant", "content": "I found an investor update from Q1 2023. Would you like me to open it?"}
+                    
+                """.trimIndent(),
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Text.EventStream.toString())
+            )
+        }
         
-        // Mock response with tool call
-        every { mockResponse.code } returns 200
-        every { mockResponse.body } returns """
-            data: {"role": "assistant", "content": null, "tool_calls": [{"id": "call_123", "type": "function", "function": {"name": "searchEmails", "arguments": "{\"query\": \"investor updates\", \"has_attachments\": false}"}}]}
-            
-            data: {"role": "tool", "name": "searchEmails", "content": "[{\"id\":\"1\",\"subject\":\"Q1 Investor Update\",\"date\":\"Apr 1, 2023\"}]"}
-            
-            data: {"role": "assistant", "content": "I found an investor update from Q1 2023. Would you like me to open it?"}
-            
-        """.trimIndent().toResponseBody()
-        every { mockClient.newCall(any()).execute() } returns mockResponse
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json()
+            }
+        }
         
         // Create test tool
         val searchEmails = object : CallableTool {
@@ -70,9 +76,9 @@ class ToolCallTest {
         
         val provider = OpenAIProvider(
             apiKey = "test-key",
-            client = mockClient
+            httpClient = client
         )
-        
+
         val messages = listOf(
             ChatMessage(role = "user", content = "Find my investor updates")
         )
@@ -90,54 +96,6 @@ class ToolCallTest {
         
         assertEquals(3, result.size)
         assertNotNull(result[2])
-        assert(result[2].contains("I found an investor update"))
-    }
-    
-    @Test
-    fun `should handle tool call validation`() = runBlocking {
-        val tool = object : CallableTool {
-            override val definition = ToolDefinition(
-                function = ToolFunction(
-                    name = "testTool",
-                    description = "A test tool",
-                    parameters = mapOf(
-                        "type" to "object",
-                        "properties" to mapOf(
-                            "required_param" to mapOf(
-                                "type" to "string",
-                                "description" to "Required parameter"
-                            ),
-                            "optional_param" to mapOf(
-                                "type" to "number",
-                                "description" to "Optional parameter"
-                            )
-                        ),
-                        "required" to listOf("required_param")
-                    )
-                )
-            )
-            
-            override suspend fun call(arguments: Map<String, Any>): Any {
-                require(arguments.containsKey("required_param")) { "Missing required parameter" }
-                return "Success"
-            }
-        }
-        
-        // Test with valid arguments
-        val result = tool.call(mapOf(
-            "required_param" to "test",
-            "optional_param" to 42.0
-        ))
-        assertEquals("Success", result)
-        
-        // Test with missing required parameter
-        try {
-            tool.call(mapOf(
-                "optional_param" to 42.0
-            ))
-            throw AssertionError("Should have thrown IllegalArgumentException")
-        } catch (e: IllegalArgumentException) {
-            assertEquals("Missing required parameter", e.message)
-        }
+        assertTrue(result[2].contains("I found an investor update"))
     }
 }

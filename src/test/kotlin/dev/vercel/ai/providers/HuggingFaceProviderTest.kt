@@ -89,14 +89,23 @@ class HuggingFaceProviderTest {
 
     @Test
     fun `chat should handle invalid message roles`() = runTest {
+        val mockEngine = MockEngine { request ->
+            respond(
+                content = """{"error": "Invalid request"}""",
+                status = HttpStatusCode.BadRequest
+            )
+        }
+        
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) {
+                json()
+            }
+        }
+        
         val provider = HuggingFaceProvider(
             apiKey = "test-key",
             baseUrl = "https://api-inference.huggingface.co/models",
-            httpClient = HttpClient(MockEngine) {
-                install(ContentNegotiation) {
-                    json()
-                }
-            }
+            httpClient = client
         )
 
         val options = HuggingFaceOptions.gpt2()

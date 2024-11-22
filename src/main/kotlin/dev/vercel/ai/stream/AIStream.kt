@@ -2,58 +2,22 @@ package dev.vercel.ai.stream
 
 import dev.vercel.ai.common.AbortSignal
 import dev.vercel.ai.errors.AIError
-import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.bodyAsChannel
-import io.ktor.http.isSuccess
+import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import okhttp3.Response
 
 object AIStream {
     fun fromResponse(
-        response: Response,
-        signal: AbortSignal? = null
-    ): Flow<String> = flow {
-        response.use { r ->
-            if (!r.isSuccessful) {
-                throw AIError.ProviderError(
-                    message = "Request failed with status code ${r.code}",
-                    statusCode = r.code,
-                    provider = "azure"
-                )
-            }
-
-            val body = r.body ?: throw AIError.StreamError(
-                message = "Empty response body",
-                cause = null
-            )
-            val source = body.source()
-            val buffer = source.buffer
-
-            while (!source.exhausted()) {
-                signal?.throwIfAborted()
-
-                val line = buffer.readUtf8Line() ?: continue
-                if (line.isEmpty() || !line.startsWith("data: ")) continue
-
-                val data = line.substring(6)
-                if (data == "[DONE]") break
-
-                emit(data)
-            }
-        }
-    }
-
-    fun fromResponse(
         response: HttpResponse,
         signal: AbortSignal? = null,
-        parser: (String) -> String?
+        parser: (String) -> String? = { it }
     ): Flow<String> = flow {
         if (!response.status.isSuccess()) {
             throw AIError.ProviderError(
                 message = "Request failed with status code ${response.status.value}",
                 statusCode = response.status.value,
-                provider = "azure"
+                provider = "openai"
             )
         }
 

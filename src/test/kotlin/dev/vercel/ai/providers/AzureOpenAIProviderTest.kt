@@ -90,7 +90,7 @@ class AzureOpenAIProviderTest {
             }
         }
 
-        val errorProvider = AzureOpenAIProvider(
+        val provider = AzureOpenAIProvider(
             apiKey = "test-key",
             httpClient = errorClient
         )
@@ -105,7 +105,7 @@ class AzureOpenAIProviderTest {
         )
 
         val error = assertThrows<AIError.RateLimitError> {
-            errorProvider.chat(
+            provider.chat(
                 messages = messages,
                 options = options
             ).toList()
@@ -119,7 +119,9 @@ class AzureOpenAIProviderTest {
     fun `chat should handle abort signal`() = runTest {
         val mockEngine = MockEngine { request ->
             respond(
-                content = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
+                content = """
+                    data: {"id":"1","object":"chat.completion.chunk","created":1700000000,"model":"gpt-4","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+                """.trimIndent(),
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Text.EventStream.toString())
             )
@@ -136,13 +138,13 @@ class AzureOpenAIProviderTest {
             httpClient = client
         )
 
-        val messages = listOf(
-            ChatMessage(role = "user", content = "Hello!")
-        )
-        
         val options = AzureOpenAIOptions.gpt4(
             deploymentId = "gpt4",
             endpoint = "https://example.azure.openai.com"
+        )
+
+        val messages = listOf(
+            ChatMessage(role = "user", content = "Hello!")
         )
 
         val controller = AbortController()

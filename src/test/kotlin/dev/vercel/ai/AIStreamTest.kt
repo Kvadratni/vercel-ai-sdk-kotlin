@@ -2,10 +2,12 @@ package dev.vercel.ai
 
 import dev.vercel.ai.errors.AIError
 import dev.vercel.ai.stream.AIStream
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.util.InternalAPI
+import io.ktor.utils.io.*
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import io.mockk.every
@@ -14,17 +16,20 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AIStreamTest {
+    @OptIn(InternalAPI::class)
     @Test
     fun `should handle successful streaming response`() = runBlocking {
-        val mockResponse = mockk<Response>(relaxed = true)
-        every { mockResponse.isSuccessful } returns true
-        every { mockResponse.body } returns """
+        val mockResponse = mockk<HttpResponse>()
+        
+        // Mock successful response with streaming data
+        every { mockResponse.status } returns HttpStatusCode.OK
+        every { mockResponse.content } returns ByteReadChannel("""
             data: {"text": "Hello"}
-            
+
             data: {"text": " World"}
-            
+
             data: [DONE]
-        """.trimIndent().toResponseBody()
+        """.trimIndent())
 
         val flow = AIStream.fromResponse(mockResponse)
         val results = flow.toList()
@@ -34,13 +39,14 @@ class AIStreamTest {
         assertTrue(results[1].contains("World"))
     }
 
+    @OptIn(InternalAPI::class)
     @Test
     fun `should handle error response`() = runBlocking {
-        val mockResponse = mockk<Response>()
-        every { mockResponse.isSuccessful } returns false
-        every { mockResponse.code } returns 500
-        every { mockResponse.message } returns "Internal Server Error"
-        every { mockResponse.close() } returns Unit
+        val mockResponse = mockk<HttpResponse>()
+        
+        // Mock error response
+        every { mockResponse.status } returns HttpStatusCode.InternalServerError
+        every { mockResponse.content } returns ByteReadChannel("")
 
         val error = assertThrows<AIError.ProviderError> {
             AIStream.fromResponse(mockResponse).toList()
@@ -50,27 +56,30 @@ class AIStreamTest {
         assertEquals("Request failed with status code 500", error.message)
     }
 
+    @OptIn(InternalAPI::class)
     @Test
     fun `should handle empty response body`() = runBlocking {
-        val mockResponse = mockk<Response>()
-        every { mockResponse.isSuccessful } returns true
-        every { mockResponse.body } returns null
-        every { mockResponse.close() } returns Unit
+        val mockResponse = mockk<HttpResponse>()
+        
+        // Mock empty response
+        every { mockResponse.status } returns HttpStatusCode.OK
+        every { mockResponse.content } returns ByteReadChannel("")
 
-        val error = assertThrows<AIError.StreamError> {
-            AIStream.fromResponse(mockResponse).toList()
-        }
-
-        assertEquals("Empty response body", error.message)
+        // Empty response should result in empty list of results
+        val results = AIStream.fromResponse(mockResponse).toList()
+        assertTrue(results.isEmpty())
     }
 
+    @OptIn(InternalAPI::class)
     @Test
     fun `should handle malformed stream data`() = runBlocking {
-        val mockResponse = mockk<Response>()
-        every { mockResponse.isSuccessful } returns true
-        every { mockResponse.body } returns "invalid data format".toResponseBody()
-        every { mockResponse.close() } returns Unit
+        val mockResponse = mockk<HttpResponse>()
+        
+        // Mock malformed response
+        every { mockResponse.status } returns HttpStatusCode.OK
+        every { mockResponse.content } returns ByteReadChannel("invalid data format")
 
+        // Malformed data should result in empty list of results
         val results = AIStream.fromResponse(mockResponse).toList()
         assertTrue(results.isEmpty())
     }

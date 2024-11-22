@@ -90,9 +90,12 @@ class AnthropicProvider(
             }
 
             AIStream.fromResponse(response, signal) { data ->
-                val jsonElement = Json.parseToJsonElement(data)
-                jsonElement.jsonObject["completion"]?.jsonPrimitive?.content
-                    ?: throw AIError.StreamError("Invalid response format", null)
+                try {
+                    val jsonElement = Json.parseToJsonElement(data)
+                    jsonElement.jsonObject["completion"]?.jsonPrimitive?.content
+                } catch (e: Exception) {
+                    null
+                }
             }
         }
     }
