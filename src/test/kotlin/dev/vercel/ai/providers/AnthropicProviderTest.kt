@@ -1,6 +1,6 @@
 package dev.vercel.ai.providers
 
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.errors.AIError
 import dev.vercel.ai.options.AnthropicOptions
 import io.ktor.client.*

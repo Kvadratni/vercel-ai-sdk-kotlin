@@ -1,7 +1,7 @@
 package dev.vercel.ai.providers
 
 import dev.vercel.ai.AIModel
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.common.AbortSignal
 import dev.vercel.ai.errors.AIError
 import dev.vercel.ai.errors.RetryHandler
@@ -44,17 +44,44 @@ class HuggingFaceProvider(
                 setBody(requestBody.toString())
             }
 
-            if (response.status == HttpStatusCode.TooManyRequests) {
-                throw AIError.RateLimitError(
-                    provider = "huggingface",
-                    retryAfter = response.headers["Retry-After"]?.toLongOrNull()?.times(1000)
-                )
+            when (response.status) {
+                HttpStatusCode.TooManyRequests -> {
+                    val retryAfter = response.headers["Retry-After"]?.toLongOrNull()?.times(1000)
+                    throw AIError.RateLimitError(
+                        provider = "huggingface",
+                        retryAfter = retryAfter
+                    )
+                }
+                HttpStatusCode.Unauthorized -> {
+                    throw AIError.ProviderError(
+                        statusCode = response.status.value,
+                        message = "Invalid API key",
+                        provider = "huggingface"
+                    )
+                }
+                HttpStatusCode.BadRequest -> {
+                    throw AIError.ProviderError(
+                        statusCode = response.status.value,
+                        message = "Bad request - check your input parameters",
+                        provider = "huggingface"
+                    )
+                }
+                else -> {
+                    if (response.status.value >= 400) {
+                        throw AIError.ProviderError(
+                            statusCode = response.status.value,
+                            message = "Unexpected error from HuggingFace API",
+                            provider = "huggingface"
+                        )
+                    }
+                }
             }
 
-            AIStream.fromResponse(response) { data ->
+            AIStream.fromResponse(response, signal) { data ->
                 // Parse the data string and extract content
-                // For HuggingFace, the response is typically just the text content
-                data
+                val jsonElement = Json.parseToJsonElement(data)
+                jsonElement.jsonObject["token"]?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: throw AIError.StreamError("Invalid response format", null)
             }
         }
     }

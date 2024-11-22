@@ -1,6 +1,6 @@
 package dev.vercel.ai.providers
 
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.errors.AIError
 import dev.vercel.ai.options.HuggingFaceOptions
 import io.ktor.client.*
@@ -19,7 +19,15 @@ class HuggingFaceProviderTest {
     fun `chat should properly format conversation`() = runTest {
         val mockEngine = MockEngine { request ->
             respond(
-                content = """data: {"text": "Hello world!"}""",
+                content = """
+                    data: {"token": {"text": "Hello"}}
+                    
+                    data: {"token": {"text": " world"}}
+                    
+                    data: {"token": {"text": "!"}}
+                    
+                    data: [DONE]
+                """.trimIndent(),
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, "text/event-stream")
             )
@@ -45,7 +53,7 @@ class HuggingFaceProviderTest {
         val options = HuggingFaceOptions.gpt2()
         val response = provider.chat(messages, options).toList()
 
-        assertEquals(listOf("Hello world!"), response)
+        assertEquals(listOf("Hello", " world", "!"), response)
     }
 
     @Test
@@ -81,31 +89,24 @@ class HuggingFaceProviderTest {
 
     @Test
     fun `chat should handle invalid message roles`() = runTest {
-        val mockEngine = MockEngine { request ->
-            respond(
-                content = """{"error": "Invalid request"}""",
-                status = HttpStatusCode.BadRequest
-            )
-        }
-        
-        val client = HttpClient(mockEngine) {
-            install(ContentNegotiation) {
-                json()
-            }
-        }
-        
         val provider = HuggingFaceProvider(
             apiKey = "test-key",
             baseUrl = "https://api-inference.huggingface.co/models",
-            httpClient = client
+            httpClient = HttpClient(MockEngine) {
+                install(ContentNegotiation) {
+                    json()
+                }
+            }
         )
 
         val options = HuggingFaceOptions.gpt2()
 
-        assertThrows<AIError.ConfigurationError> {
+        val error = assertThrows<AIError.ConfigurationError> {
             provider.chat(listOf(
                 ChatMessage(role = "invalid", content = "test")
             ), options).toList()
         }
+
+        assertEquals("Unsupported message role: invalid", error.message)
     }
 }

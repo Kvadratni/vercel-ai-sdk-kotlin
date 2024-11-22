@@ -1,6 +1,6 @@
 package dev.vercel.ai.providers
 
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.options.CohereOptions
 import dev.vercel.ai.options.ModelParameters
 import io.ktor.client.*

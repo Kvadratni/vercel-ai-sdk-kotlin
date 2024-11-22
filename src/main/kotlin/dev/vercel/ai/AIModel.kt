@@ -3,7 +3,7 @@ package dev.vercel.ai
 import dev.vercel.ai.common.AbortSignal
 import dev.vercel.ai.options.ProviderOptions
 import dev.vercel.ai.tools.CallableTool
-import dev.vercel.ai.functions.FunctionCall
+import dev.vercel.ai.models.ChatMessage
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -29,13 +29,3 @@ interface AIModel {
         signal: AbortSignal? = null
     ): Flow<String>
 }
-
-/**
- * Represents a chat message with role and content
- */
-data class ChatMessage(
-    val role: String,
-    val content: String,
-    val name: String? = null,
-    val functionCall: FunctionCall? = null
-)

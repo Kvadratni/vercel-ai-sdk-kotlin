@@ -1,6 +1,6 @@
 package dev.vercel.ai.integration
 
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.options.AnthropicOptions
 import dev.vercel.ai.options.ModelParameters
 import dev.vercel.ai.errors.AIError

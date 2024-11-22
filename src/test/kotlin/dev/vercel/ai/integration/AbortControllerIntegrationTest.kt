@@ -1,6 +1,6 @@
 package dev.vercel.ai.integration
 
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.common.AbortController
 import dev.vercel.ai.options.OpenAIOptions
 import dev.vercel.ai.options.AnthropicOptions

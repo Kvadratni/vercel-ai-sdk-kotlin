@@ -1,7 +1,7 @@
 package dev.vercel.ai.providers
 
 import dev.vercel.ai.AIModel
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.common.AbortSignal
 import dev.vercel.ai.options.CohereOptions
 import dev.vercel.ai.options.ProviderOptions

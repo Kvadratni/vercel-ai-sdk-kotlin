@@ -1,6 +1,6 @@
 package dev.vercel.ai.providers
 
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.common.AbortController
 import dev.vercel.ai.common.AbortError
 import dev.vercel.ai.errors.AIError
@@ -120,7 +120,8 @@ class AzureOpenAIProviderTest {
         val mockEngine = MockEngine { request ->
             respond(
                 content = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"created\":1700000000,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n",
-                status = HttpStatusCode.OK
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, ContentType.Text.EventStream.toString())
             )
         }
         

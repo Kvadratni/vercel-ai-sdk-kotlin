@@ -14,6 +14,7 @@ repositories {
 dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
     implementation("io.ktor:ktor-client-core:2.3.6")
     implementation("io.ktor:ktor-client-cio:2.3.6")
     implementation("io.ktor:ktor-client-okhttp:2.3.6")
@@ -21,7 +22,7 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.6")
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
-    implementation("org.json:json:20231013") // Added for JSON support in embeddings
+    implementation("org.json:json:20231013")
     
     testImplementation("org.jetbrains.kotlin:kotlin-test:2.0.0")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.0.0")
@@ -68,6 +69,9 @@ tasks.test {
     // Configure timeouts
     systemProperty("junit.jupiter.execution.timeout.default", "30s")
     systemProperty("junit.jupiter.execution.timeout.testable.method.default", "30s")
+    
+    // Enable ByteBuddy experimental support for Java 21
+    jvmArgs("-Dnet.bytebuddy.experimental=true")
     
     // Configure test logging
     testLogging {

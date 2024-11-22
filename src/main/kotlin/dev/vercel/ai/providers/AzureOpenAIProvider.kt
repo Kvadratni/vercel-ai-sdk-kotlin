@@ -1,7 +1,7 @@
 package dev.vercel.ai.providers
 
 import dev.vercel.ai.AIModel
-import dev.vercel.ai.ChatMessage
+import dev.vercel.ai.models.ChatMessage
 import dev.vercel.ai.common.AbortSignal
 import dev.vercel.ai.errors.AIError
 import dev.vercel.ai.options.AzureOpenAIOptions
@@ -14,8 +14,10 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.headers
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.flow.Flow
@@ -90,7 +92,6 @@ class AzureOpenAIProvider(
                             put("function", buildJsonObject {
                                 put("name", tool.definition.function.name)
                                 put("description", tool.definition.function.description)
-                                // Parse parameters from string to JsonElement
                                 put("parameters", json.parseToJsonElement(
                                     json.encodeToString(
                                         JsonObject.serializer(),
@@ -109,21 +110,65 @@ class AzureOpenAIProvider(
             put("stream", true)
         }
 
-        val response = httpClient.post("${options.endpoint}/openai/deployments/${options.deploymentId}/chat/completions") {
-            contentType(ContentType.Application.Json)
-            headers {
-                append(HttpHeaders.Authorization, "Bearer $apiKey")
-                append("api-key", apiKey)
-                append("api-version", options.apiVersion)
+        try {
+            val response = httpClient.post("${options.endpoint}/openai/deployments/${options.deploymentId}/chat/completions") {
+                contentType(ContentType.Application.Json)
+                headers {
+                    append(HttpHeaders.Authorization, "Bearer $apiKey")
+                    append("api-key", apiKey)
+                    append("api-version", options.apiVersion)
+                }
+                setBody(requestBody.toString())
             }
-            setBody(requestBody.toString())
-        }
 
-        return AIStream.fromResponse(response, signal) { content ->
-            val json = Json.parseToJsonElement(content)
-            json.jsonObject["choices"]?.jsonArray?.firstOrNull()
-                ?.jsonObject?.get("delta")?.jsonObject?.get("content")?.jsonPrimitive?.content
-                ?: throw AIError.StreamError("Invalid response format", null)
+            when (response.status) {
+                HttpStatusCode.TooManyRequests -> {
+                    val retryAfter = response.headers["Retry-After"]?.toLongOrNull()?.times(1000)
+                    throw AIError.RateLimitError(
+                        provider = "azure_openai",
+                        retryAfter = retryAfter
+                    )
+                }
+                HttpStatusCode.Unauthorized -> {
+                    throw AIError.ProviderError(
+                        statusCode = response.status.value,
+                        message = "Invalid API key",
+                        provider = "azure_openai"
+                    )
+                }
+                HttpStatusCode.BadRequest -> {
+                    throw AIError.ProviderError(
+                        statusCode = response.status.value,
+                        message = "Bad request - check your input parameters",
+                        provider = "azure_openai"
+                    )
+                }
+                else -> {
+                    if (response.status.value >= 400) {
+                        throw AIError.ProviderError(
+                            statusCode = response.status.value,
+                            message = "Unexpected error from Azure OpenAI API",
+                            provider = "azure_openai"
+                        )
+                    }
+                }
+            }
+
+            return AIStream.fromResponse(response, signal) { content ->
+                val jsonElement = Json.parseToJsonElement(content)
+                jsonElement.jsonObject["choices"]?.jsonArray?.firstOrNull()
+                    ?.jsonObject?.get("delta")?.jsonObject?.get("content")?.jsonPrimitive?.content
+                    ?: throw AIError.StreamError("Invalid response format", null)
+            }
+        } catch (e: Exception) {
+            when (e) {
+                is AIError -> throw e
+                else -> throw AIError.ProviderError(
+                    statusCode = 500,
+                    message = e.message ?: "Unknown error",
+                    provider = "azure_openai"
+                )
+            }
         }
     }
 
